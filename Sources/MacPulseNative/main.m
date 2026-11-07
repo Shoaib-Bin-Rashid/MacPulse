@@ -277,7 +277,19 @@ int main(int argc, const char * argv[]) {
         // 2. Check for help
         for (int i = 1; i < argc; i++) {
             if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
-                fprintf(stdout, "Usage: MacPulse [--selftest] [--help]\n");
+                fprintf(stdout,
+                        "MacPulse - Native macOS Menu Bar Keep-Awake Utility (v1.0.0)\n"
+                        "Usage: MacPulse [options]\n\n"
+                        "Options:\n"
+                        "  --selftest     Run headless regression and integration self-tests\n"
+                        "  -h, --help     Show this help and options reference\n\n"
+                        "Features:\n"
+                        "  - Smart Awake: Keeps Mac awake while on AC power\n"
+                        "  - Timed Awake: Custom duration & presets (15m to 8h)\n"
+                        "  - Always Awake: Battery-safe continuous awake mode\n"
+                        "  - Keep Display Awake: Prevents monitor idle sleep (cutoff safe)\n"
+                        "  - Battery Cutoff: Configurable safety threshold (default 40%%)\n"
+                        "  - Launch at Login: Background SMAppService integration\n");
                 return 0;
             }
         }

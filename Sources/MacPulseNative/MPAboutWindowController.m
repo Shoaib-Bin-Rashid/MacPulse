@@ -83,11 +83,11 @@
         },
         @{
             @"title": @"Always Awake & Battery Shield",
-            @"desc": @"Keeps system awake on both AC and battery; battery cutoff automatically disengages below safety threshold (10%-80%, default 20%)."
+            @"desc": @"Keeps system awake on both AC and battery; battery cutoff automatically disengages below safety threshold (10%-80%, default 40%)."
         },
         @{
-            @"title": @"Allow Display Sleep",
-            @"desc": @"Independent display sleep toggle allowing your monitor to sleep while keeping background tasks and system fully awake."
+            @"title": @"Keep Display Awake",
+            @"desc": @"Prevents monitor idle sleep when enabled. Automatically disengages below battery safety threshold (default 40%) to protect power."
         },
         @{
             @"title": @"Launch at Login",

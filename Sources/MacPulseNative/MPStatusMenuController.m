@@ -191,7 +191,14 @@
     _alwaysAwakeItem.target = self;
     [_menu addItem:_alwaysAwakeItem];
     
-    // Battery Safety Threshold Submenu
+    // Keep Display Awake Toggle (Default: OFF - screen sleeps naturally, respects battery threshold)
+    _keepDisplayAwakeItem = [[NSMenuItem alloc] initWithTitle:@"Keep Display Awake"
+                                                       action:@selector(toggleKeepDisplayAwake)
+                                                keyEquivalent:@"d"];
+    _keepDisplayAwakeItem.target = self;
+    [_menu addItem:_keepDisplayAwakeItem];
+    
+    // Battery Safety Threshold Submenu (Applies to Always Awake & Keep Display Awake)
     _thresholdParentItem = [[NSMenuItem alloc] initWithTitle:@"Battery Safety Threshold" action:nil keyEquivalent:@""];
     NSMenu *thresholdSubmenu = [[NSMenu alloc] initWithTitle:@"Battery Safety Threshold"];
     NSArray<NSNumber *> *thresholds = @[@10, @20, @30, @40, @50, @60, @70, @80];
@@ -204,13 +211,6 @@
     }
     _thresholdParentItem.submenu = thresholdSubmenu;
     [_menu addItem:_thresholdParentItem];
-    
-    // Keep Display Awake Toggle (Default: OFF - screen sleeps naturally)
-    _keepDisplayAwakeItem = [[NSMenuItem alloc] initWithTitle:@"Keep Display Awake"
-                                                       action:@selector(toggleKeepDisplayAwake)
-                                                keyEquivalent:@"d"];
-    _keepDisplayAwakeItem.target = self;
-    [_menu addItem:_keepDisplayAwakeItem];
     
     [_menu addItem:[NSMenuItem separatorItem]];
     
