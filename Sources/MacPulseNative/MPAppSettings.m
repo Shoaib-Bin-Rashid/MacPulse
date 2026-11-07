@@ -68,7 +68,7 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
         [defs setBool:NO forKey:kAlwaysAwakeKey];
     }
     if ([defs objectForKey:kBatterySafetyThresholdKey] == nil) {
-        [defs setInteger:20 forKey:kBatterySafetyThresholdKey];
+        [defs setInteger:40 forKey:kBatterySafetyThresholdKey];
     }
     [defs synchronize];
     CFPreferencesAppSynchronize((__bridge CFStringRef)kBundleIdentifier);
@@ -96,8 +96,8 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
     }
     
     id threshVal = [defs objectForKey:kBatterySafetyThresholdKey];
-    NSInteger threshold = (threshVal != nil) ? [defs integerForKey:kBatterySafetyThresholdKey] : 20;
-    _batterySafetyThreshold = (threshold > 0) ? threshold : 20;
+    NSInteger threshold = (threshVal != nil) ? [defs integerForKey:kBatterySafetyThresholdKey] : 40;
+    _batterySafetyThreshold = (threshold > 0) ? threshold : 40;
 }
 
 - (void)userDefaultsDidChange:(NSNotification *)note {
@@ -135,7 +135,7 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
 }
 
 - (void)setBatterySafetyThreshold:(NSInteger)batterySafetyThreshold {
-    _batterySafetyThreshold = (batterySafetyThreshold > 0) ? batterySafetyThreshold : 20;
+    _batterySafetyThreshold = (batterySafetyThreshold > 0) ? batterySafetyThreshold : 40;
     [[self userDefaults] setInteger:_batterySafetyThreshold forKey:kBatterySafetyThresholdKey];
     [[self userDefaults] synchronize];
     CFPreferencesAppSynchronize((__bridge CFStringRef)kBundleIdentifier);

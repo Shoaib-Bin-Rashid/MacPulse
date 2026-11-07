@@ -46,7 +46,7 @@ static int runSelfTests(void) {
         NSInteger origThreshold = settings.batterySafetyThreshold;
         
         if (settings.batterySafetyThreshold < 10) {
-            settings.batterySafetyThreshold = 20;
+            settings.batterySafetyThreshold = 40;
         }
         fprintf(stdout, "[PASS] MPAppSettings initialization and defaults\n");
         

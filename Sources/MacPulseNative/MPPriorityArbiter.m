@@ -127,8 +127,14 @@
         reason = @"MacPulse: Normal sleep";
     }
     
-    // Display Sleep: only prevented if system sleep is prevented AND keepDisplayAwake is YES (Display Always On)
-    BOOL preventDisplay = (preventSystem && self.settings.keepDisplayAwake);
+    // Battery cutoff protection for Keep Display Awake
+    BOOL isBatteryBelowThreshold = (isPortableOnBattery && battery >= 0 && battery <= threshold);
+    if (self.settings.keepDisplayAwake && isBatteryBelowThreshold) {
+        self.settings.keepDisplayAwake = NO; // Disengage display awake when battery is below safety cutoff
+    }
+    
+    // Display Sleep: only prevented if system sleep is prevented AND keepDisplayAwake is YES AND battery is above safety threshold
+    BOOL preventDisplay = (preventSystem && self.settings.keepDisplayAwake && !isBatteryBelowThreshold);
     
     _currentMode = effectiveMode;
     

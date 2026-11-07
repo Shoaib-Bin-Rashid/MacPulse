@@ -70,7 +70,7 @@
     NSMenu *_timedAwakeSubmenu;
     NSMenuItem *_alwaysAwakeItem;
     NSMenuItem *_thresholdParentItem;
-    NSMenuItem *_displayAlwaysOnItem;
+    NSMenuItem *_keepDisplayAwakeItem;
     NSMenuItem *_batteryWarningItem;
     NSMenuItem *_powerSourceStatusItem;
     NSMenuItem *_systemStatusItem;
@@ -205,12 +205,12 @@
     _thresholdParentItem.submenu = thresholdSubmenu;
     [_menu addItem:_thresholdParentItem];
     
-    // Display Always On Toggle (positive logic: keep screen awake)
-    _displayAlwaysOnItem = [[NSMenuItem alloc] initWithTitle:@"Display Always On"
-                                                      action:@selector(toggleDisplayAlwaysOn)
-                                               keyEquivalent:@"d"];
-    _displayAlwaysOnItem.target = self;
-    [_menu addItem:_displayAlwaysOnItem];
+    // Keep Display Awake Toggle (Default: OFF - screen sleeps naturally)
+    _keepDisplayAwakeItem = [[NSMenuItem alloc] initWithTitle:@"Keep Display Awake"
+                                                       action:@selector(toggleKeepDisplayAwake)
+                                                keyEquivalent:@"d"];
+    _keepDisplayAwakeItem.target = self;
+    [_menu addItem:_keepDisplayAwakeItem];
     
     [_menu addItem:[NSMenuItem separatorItem]];
     
@@ -394,7 +394,7 @@
     _keepAwakeChargingItem.state = _settings.keepAwakeWhileCharging ? NSControlStateValueOn : NSControlStateValueOff;
     _timedAwakeParentItem.state = _timedAwakeManager.isActive ? NSControlStateValueOn : NSControlStateValueOff;
     _alwaysAwakeItem.state = _settings.alwaysAwake ? NSControlStateValueOn : NSControlStateValueOff;
-    _displayAlwaysOnItem.state = _settings.keepDisplayAwake ? NSControlStateValueOn : NSControlStateValueOff;
+    _keepDisplayAwakeItem.state = _settings.keepDisplayAwake ? NSControlStateValueOn : NSControlStateValueOff;
     
     // Update threshold submenu item checkmarks
     NSInteger currentThreshold = _settings.batterySafetyThreshold;
@@ -447,13 +447,17 @@
     [_arbiter evaluateEffectiveState];
 }
 
-- (void)toggleDisplayAlwaysOn {
+- (void)toggleKeepDisplayAwake {
     _settings.keepDisplayAwake = !_settings.keepDisplayAwake;
     [_arbiter evaluateEffectiveState];
 }
 
+- (void)toggleDisplayAlwaysOn {
+    [self toggleKeepDisplayAwake];
+}
+
 - (void)toggleAllowDisplaySleep {
-    [self toggleDisplayAlwaysOn];
+    [self toggleKeepDisplayAwake];
 }
 
 - (void)selectThreshold:(NSMenuItem *)sender {

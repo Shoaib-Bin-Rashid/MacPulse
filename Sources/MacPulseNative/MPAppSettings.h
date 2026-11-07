@@ -11,9 +11,9 @@ extern NSString *const kMPAppSettingsDidChangeNotification;
 
 @property (nonatomic, assign) BOOL keepAwakeWhileCharging;
 @property (nonatomic, assign) BOOL alwaysAwake;
-@property (nonatomic, assign) BOOL keepDisplayAwake; // Default: NO (display sleeps normally unless user enables Display Always On)
+@property (nonatomic, assign) BOOL keepDisplayAwake; // Default: NO (display sleeps normally unless user enables Keep Display Awake)
 @property (nonatomic, assign) BOOL allowDisplaySleep; // Legacy inverted alias for keepDisplayAwake (!keepDisplayAwake)
-@property (nonatomic, assign) NSInteger batterySafetyThreshold; // Default: 20 (percent)
+@property (nonatomic, assign) NSInteger batterySafetyThreshold; // Default: 40 (percent)
 
 + (instancetype)sharedSettings;
 - (void)reloadSettings;
