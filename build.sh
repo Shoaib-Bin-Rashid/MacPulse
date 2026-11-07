@@ -34,6 +34,7 @@ icon_src="$here/Icon/AppIcon.icns"
 
 # Build local bundle in build/ directory
 mkdir -p "$app_bundle/Contents/MacOS" "$app_bundle/Contents/Resources"
+touch "$build_dir/.metadata_never_index"
 rm -rf "$app_bundle/Contents/MacOS/$name"
 cp "$bin_dir/$name" "$app_bundle/Contents/MacOS/$name"
 if [[ -f "$icon_src" ]]; then
@@ -42,12 +43,19 @@ fi
 sed -e "s/__BUILD__/$(date +%Y%m%d%H%M)/" "$here/Info.plist.in" > "$app_bundle/Contents/Info.plist"
 xattr -cr "$app_bundle"
 codesign --force --sign - "$app_bundle" 2>&1 | grep -v "replacing existing signature" || true
+echo "✅ Built bundle: $app_bundle"
 
 # Clean up any duplicate copy in ~/Applications to avoid Raycast/Spotlight duplicate collisions
 if [[ -d "$user_app" ]]; then
     echo "🧹 Removing legacy duplicate from ~/Applications..."
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$user_app" 2>/dev/null || true
     rm -rf "$user_app"
+fi
+
+# Only install to /Applications if explicitly requested with --install or --open
+if [[ " $* " != *" --install "* && " $* " != *" --open "* ]]; then
+    echo "💡 Note: Normal build completed without overwriting /Applications. Use './build.sh --install' to install."
+    exit 0
 fi
 
 # Primary installation target: /Applications/MacPulse.app

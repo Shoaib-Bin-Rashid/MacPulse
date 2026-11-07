@@ -1,52 +1,63 @@
-# MacPulse
+# MacPulse Developer Reference
 
-A native macOS app in SwiftUI. It runs on this Mac only, with a local
-SwiftData database and no server.
+A native macOS menu bar keep-awake utility (`LSUIElement = true`) implemented in Objective-C, AppKit, and Apple IOKit. It runs locally with no external daemon, server, or cloud dependencies.
 
-## Layout
+## Architecture & Codebase Layout
 
-- `Sources/MacPulse/` the app. `App.swift` has the window, menus, and the database location.
-- `Sources/MacPulseKit/` rules and data logic with no SwiftUI. Tests in `Tests/MacPulseKitTests/`.
-- `Package.swift` a Swift package. There is no Xcode project.
-- `build.sh` builds, signs, and installs `~/Applications/MacPulse.app`.
-- `Icon/AppIcon.icon` the app icon, an Icon Composer file (JSON plus SVG layers). `build.sh` compiles it with `tools/make_icon.sh`; `tools/icon_review.sh` renders every look into one PNG.
-- `docs/` the brief, the screen index, and the user stories, when they exist.
+- `Sources/MacPulseNative/` — Core Objective-C engine:
+  - `main.m`: Application delegate, single-instance file lock guard (`SEC-001`), CLI flag parser (`--selftest`, `--help`), and headless self-test runner.
+  - `MPCommon.h`: Common enumerations (`MPActiveMode`), battery threshold constants (`kMPBatteryThresholdMin 10`, `Max 80`, `Default 40`).
+  - `MPAppSettings.h/.m`: Persistent user defaults with isolated suite support (`MACPULSE_DEFAULTS_SUITE`), boundary clamping, and notification broadcasting.
+  - `MPPowerManager.h/.m`: Thread-safe (`os_unfair_lock`) IOKit power assertion manager (`PreventUserIdleSystemSleep`, `PreventUserIdleDisplaySleep`).
+  - `MPPowerSourceMonitor.h/.m`: Zero-polling event-driven power source monitor (`IOPSNotificationCreateRunLoopSource`) with monotonic generation token and debounce protection.
+  - `MPPriorityArbiter.h/.m`: Deterministic priority arbitration engine (Always Awake > Timed Awake > Smart Awake > Disabled) and battery threshold cutoff evaluator.
+  - `MPTimedAwakeManager.h/.m`: Sleep-aware continuous countdown timer (`mach_continuous_time`) with clock-injection provider and wake reconciliation.
+  - `MPStatusMenuController.h/.m`: AppKit menu bar controller (`NSStatusItem`), custom duration prompt, tooltips, and `SMAppService` login item integration.
+  - `MPAboutWindowController.h/.m`: Floating utility panel explaining features and controls.
+- `Icon/` — Application icon assets:
+  - `AppIcon.png`: 1024x1024 square source artwork without embedded text.
+  - `AppIcon.icns`: Multi-resolution icon compiled via `iconutil`.
+- `Tests/` — Automated test suites:
+  - `run_e2e_tests.sh`: Automated test runner across feature tiers.
+  - `tiers/tier1_features/`: Feature verification scripts (`test_f01` through `test_f10`).
+  - `tiers/tier5_adversarial/`: Concurrency, 3,840-state matrix, debounce, and kernel `pmset` lifecycle harnesses.
+- `build.sh` — Universal Mach-O compiler (`arm64` + `x86_64`) and packaging script.
 
-## Build and check
+## Common Developer Commands
 
-- Build and install: `./build.sh`. Add `--open` to restart the app with the new build. The build shows warnings; fix them.
-- Unit tests: `swift test --scratch-path ~/Library/Developer/MacPulse/test-build`.
-- Self-test (the app's real functions on a /tmp store): `tools/selftest.sh`. Exit 0 when every check passes. Add a check for every story with logic in `SelfTest.swift`.
-- After every UI change, take snapshots with sample data and look at them: `tools/snap.sh`.
-  It writes `/tmp/MacPulse-shots/<page>-light.png` and `-dark.png` for every sidebar page, and `settings-<tab>-light.png` and `-dark.png` for every Settings tab, then quits. `APP_SNAPSHOT_PAGES=all,settings tools/snap.sh` limits the pages.
-  For a panel, sheet, or popover, add a capture to `Snapshot.swift` like the Settings loop.
-- Snapshots, seed data, and the self-test refuse to run without `APP_STORE` in /tmp.
-- Never test against the real database in `~/Library/Application Support/MacPulse/`.
-- Then check the grid: `tools/grid-lint.sh` and `swift tools/check-layout.swift /tmp/MacPulse-shots/*-layout.json`. Both print PASS.
-- A change is done when the build has no errors, the grid checks pass, and you looked at the light and dark snapshots.
+- **Build Local Bundle:**
+  ```bash
+  ./build.sh
+  ```
+- **Install to `/Applications`:**
+  ```bash
+  ./build.sh --install
+  ```
+- **Build, Install, and Open:**
+  ```bash
+  ./build.sh --open
+  ```
+- **Run Headless Self-Tests:**
+  ```bash
+  ./build/bin/MacPulse --selftest
+  ```
+- **Run Tier 1 Regression Tests:**
+  ```bash
+  ./Tests/run_e2e_tests.sh --tier 1
+  ```
+- **Run Tier 5 Adversarial Stress Tests:**
+  ```bash
+  ./Tests/tiers/tier5_adversarial/run_adversarial_tests.sh
+  ```
+- **Inspect Kernel Assertions:**
+  ```bash
+  pmset -g assertions | grep MacPulse
+  ```
 
-## Design rules
+## Key Rules & Invariants
 
-- Use Apple's controls and system styles. Only the accent color is custom: `UI/Theme.swift` (`ThemeStore.defaultID`). People change it, and light or dark mode, in Settings > Appearance.
-- Views use `.tint`, `Palette.accent`, `Palette.accentText` (accent-colored text), and `Palette.onAccent` (text on an accent fill). Never hard-code colors, radii, or durations in views.
-- Compare accents: add `APP_ACCENT=<id>` to the snapshot command.
-- Spacing comes from `Space` in `UI/Grid.swift`, on a 4 pt grid. Mark custom pages and cards with `.gridArea` and `.gridProbe`.
-- Windows open calm: `.noInitialFocus()` on every window and sheet (no focus ring or selected text on open), `.fitsContent()` on sheets and Settings tabs (no scroll bar with nothing to scroll). System scroll bars. Both in `UI/WindowBehavior.swift`.
-- Settings: one tab per topic in `SettingsView.swift`, one grouped Form per tab. Add a case to `SettingsTab` for a new tab.
-- Window chrome (title bar, toolbar, sidebar, menus, sheets) stays system. Buttons use system styles, like `.borderedProminent`.
-- Colors: `.primary`, `.secondary`, `.tint`, and system colors. Never fixed grays or white for text.
-- Every action has a menu bar item and a keyboard shortcut.
-- `Label` for icon and text pairs. SF Symbols for icons.
-- `ContentUnavailableView` for empty states.
-- Liquid Glass belongs to floating controls only, never to content.
-
-## Skills
-
-The bama plugin has a skill for each step: `mac-design` (design rules),
-`design-system` (accent and tokens), `layout-grid`, `ux-design`,
-`swift-swiftui`, `os-integrations`, `performance`, `build-and-verify`,
-`test-mac-app`, `app-icon`, `user-stories`, and `improve-loop`. Use them.
-
-## Git
-
-- Commit after each working change, with a message that says what the user can now do.
+1. **Test Preference Isolation:** Never mutate `com.shoaib.macpulse` during automated tests. Always use `MACPULSE_DEFAULTS_SUITE=com.shoaib.macpulse.tests` or `[MPAppSettings sharedSettingsWithSuiteName:]`.
+2. **Single Instance Invariant:** Only one GUI menu bar instance may run at any time (`LSMultipleInstancesProhibited` + atomic `flock` guard). Secondary launches must activate the existing instance and exit with code 0.
+3. **Continuous Sleep-Aware Time:** All timer deadlines must use `mach_continuous_time()` so that time spent in system sleep counts toward session expiry.
+4. **Display Sleep Separation:** Keep Display On is strictly decoupled from system keep-awake. Display sleep assertion is only asserted when system sleep is prevented AND user enables Keep Display On AND battery is above threshold.
+5. **No Dock Icon:** Keep `LSUIElement = true` in `Info.plist.in`. MacPulse is strictly a menu bar accessory.
