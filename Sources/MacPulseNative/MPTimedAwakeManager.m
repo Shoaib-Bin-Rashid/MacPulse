@@ -1,16 +1,29 @@
 // MPTimedAwakeManager.m
-// MacPulse Native Timed Keep-Awake Session & Monotonic Countdown Engine
+// MacPulse Native Timed Keep-Awake Session & Sleep-Aware Monotonic Countdown Engine
 
 #import "MPTimedAwakeManager.h"
+#import "MPAppSettings.h"
 #import <Cocoa/Cocoa.h>
+#import <mach/mach_time.h>
 
 const NSTimeInterval kMPTimedAwakeDuration30Min = 1800.0;
 const NSTimeInterval kMPTimedAwakeDuration1Hour = 3600.0;
 const NSTimeInterval kMPTimedAwakeDuration2Hours = 7200.0;
 
+static NSTimeInterval MPContinuousTimeInSeconds(void) {
+    static mach_timebase_info_data_t s_timebaseInfo;
+    static dispatch_once_t s_timebaseOnce;
+    dispatch_once(&s_timebaseOnce, ^{
+        mach_timebase_info(&s_timebaseInfo);
+    });
+    uint64_t cont = mach_continuous_time();
+    uint64_t nanos = cont * s_timebaseInfo.numer / s_timebaseInfo.denom;
+    return (NSTimeInterval)nanos / 1.0e9;
+}
+
 @implementation MPTimedAwakeManager {
     NSTimer *_timer;
-    NSTimeInterval _targetEndUptime;
+    NSTimeInterval _targetEndContinuousTime;
 }
 
 - (instancetype)init {
@@ -18,7 +31,7 @@ const NSTimeInterval kMPTimedAwakeDuration2Hours = 7200.0;
     if (self) {
         _isActive = NO;
         _initialDuration = 0.0;
-        _targetEndUptime = 0.0;
+        _targetEndContinuousTime = 0.0;
         
         [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self
                                                                selector:@selector(handleSystemWake:)
@@ -33,7 +46,18 @@ const NSTimeInterval kMPTimedAwakeDuration2Hours = 7200.0;
     [self cancelTimerOnly];
 }
 
+- (NSTimeInterval)currentTime {
+    if (self.timeProvider) {
+        return self.timeProvider();
+    }
+    return MPContinuousTimeInSeconds();
+}
+
 - (void)handleSystemWake:(NSNotification *)note {
+    [self reconcileWakeEvent];
+}
+
+- (void)reconcileWakeEvent {
     if (_isActive) {
         [self handleTimerTick];
     }
@@ -52,8 +76,8 @@ const NSTimeInterval kMPTimedAwakeDuration2Hours = 7200.0;
         [self cancelTimerOnly];
         _isActive = NO;
         _initialDuration = 0.0;
-        _targetEndUptime = 0.0;
-        [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"activeTimedDuration"];
+        _targetEndContinuousTime = 0.0;
+        [[[MPAppSettings sharedSettings] userDefaults] removeObjectForKey:@"activeTimedDuration"];
         
         if (self.onTick) {
             self.onTick(0.0);
@@ -69,9 +93,9 @@ const NSTimeInterval kMPTimedAwakeDuration2Hours = 7200.0;
     
     _isActive = YES;
     _initialDuration = duration;
-    _targetEndUptime = [[NSProcessInfo processInfo] systemUptime] + duration;
+    _targetEndContinuousTime = [self currentTime] + duration;
     
-    [[NSUserDefaults standardUserDefaults] setInteger:(NSInteger)duration forKey:@"activeTimedDuration"];
+    [[[MPAppSettings sharedSettings] userDefaults] setInteger:(NSInteger)duration forKey:@"activeTimedDuration"];
     
     // Schedule repeating 1-second monotonic countdown timer on the main runloop
     __weak typeof(self) weakSelf = self;
@@ -94,10 +118,10 @@ const NSTimeInterval kMPTimedAwakeDuration2Hours = 7200.0;
     
     _isActive = NO;
     _initialDuration = 0.0;
-    _targetEndUptime = 0.0;
+    _targetEndContinuousTime = 0.0;
     [self cancelTimerOnly];
     
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"activeTimedDuration"];
+    [[[MPAppSettings sharedSettings] userDefaults] removeObjectForKey:@"activeTimedDuration"];
     
     if (self.onTick) {
         self.onTick(0.0);
@@ -117,16 +141,16 @@ const NSTimeInterval kMPTimedAwakeDuration2Hours = 7200.0;
     if (remaining <= 0.0) {
         _isActive = NO;
         _initialDuration = 0.0;
-        _targetEndUptime = 0.0;
+        _targetEndContinuousTime = 0.0;
         [self cancelTimerOnly];
         
-        [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"activeTimedDuration"];
+        [[[MPAppSettings sharedSettings] userDefaults] removeObjectForKey:@"activeTimedDuration"];
         
         if (self.onTick) {
             self.onTick(0.0);
         }
         if (self.onCompletion) {
-            self.onCompletion(YES); // Successfully expired
+            self.onCompletion(YES); // Successfully expired, called exactly once
         }
     } else {
         if (self.onTick) {
@@ -139,8 +163,8 @@ const NSTimeInterval kMPTimedAwakeDuration2Hours = 7200.0;
     if (!_isActive) {
         return 0.0;
     }
-    NSTimeInterval now = [[NSProcessInfo processInfo] systemUptime];
-    NSTimeInterval remaining = _targetEndUptime - now;
+    NSTimeInterval now = [self currentTime];
+    NSTimeInterval remaining = _targetEndContinuousTime - now;
     if (remaining < 0.0) {
         return 0.0;
     }

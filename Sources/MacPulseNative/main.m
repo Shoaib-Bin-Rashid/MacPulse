@@ -15,6 +15,12 @@
 static int g_singleInstanceLockFd = -1;
 
 static BOOL acquireSingleInstanceGuard(void) {
+    // If running in an isolated test harness suite, allow instance
+    const char *envSuite = getenv("MACPULSE_DEFAULTS_SUITE");
+    if (envSuite != NULL && strlen(envSuite) > 0) {
+        return YES;
+    }
+    
     NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier] ?: @"com.shoaib.macpulse";
     pid_t currentPID = getpid();
     
@@ -70,13 +76,9 @@ static int runSelfTests(void) {
     @autoreleasepool {
         fprintf(stdout, "⚡ Running MacPulse Deterministic Headless Self-Tests...\n");
         
-        // 1. AppSettings defaults & properties (backup user settings first to prevent pollution)
-        MPAppSettings *settings = [MPAppSettings sharedSettings];
-        [settings reloadSettings];
-        BOOL origCharging = settings.keepAwakeWhileCharging;
-        BOOL origAlways = settings.alwaysAwake;
-        BOOL origDisplay = settings.keepDisplayAwake;
-        NSInteger origThreshold = settings.batterySafetyThreshold;
+        // 1. AppSettings defaults & properties (isolated test suite com.shoaib.macpulse.tests)
+        MPAppSettings *settings = [MPAppSettings sharedSettingsWithSuiteName:@"com.shoaib.macpulse.tests"];
+        [settings resetSuite];
         
         // Comprehensive boundary clamping tests: [-5, 0, 9, 10, 40, 80, 81, 100]
         settings.batterySafetyThreshold = -5;
@@ -119,8 +121,8 @@ static int runSelfTests(void) {
             fprintf(stderr, "FAIL: Clamping 100 failed (%ld)\n", (long)settings.batterySafetyThreshold);
             return 1;
         }
-        settings.batterySafetyThreshold = origThreshold;
-        fprintf(stdout, "[PASS] MPAppSettings initialization, defaults, and boundary clamping [10-80%%]\n");
+        settings.batterySafetyThreshold = 40;
+        fprintf(stdout, "[PASS] MPAppSettings initialization, defaults, and boundary clamping [10-80%%] (isolated suite)\n");
         
         // 2. MPPowerManager dual assertion lifecycle and idempotency
         MPPowerManager *pm = [MPPowerManager sharedManager];
@@ -213,7 +215,7 @@ static int runSelfTests(void) {
         }
         arbiter.isTimedAwakeActive = NO;
         settings.alwaysAwake = NO;
-        settings.batterySafetyThreshold = origThreshold;
+        settings.batterySafetyThreshold = 40;
         [arbiter evaluateEffectiveState];
         fprintf(stdout, "[PASS] MPPriorityArbiter battery safety cutoff logic\n");
         
@@ -277,7 +279,56 @@ static int runSelfTests(void) {
         }
         // Idempotent repeated cancel
         [timedMgr cancelSession];
-        fprintf(stdout, "[PASS] MPTimedAwakeManager monotonic countdown and session lifecycle\n");
+        
+        // Deterministic clock-injection & sleep-wake reconciliation test
+        __block NSTimeInterval fakeContinuousTime = 1000.0;
+        timedMgr.timeProvider = ^NSTimeInterval(void) {
+            return fakeContinuousTime;
+        };
+        __block int completionCount = 0;
+        __block BOOL lastExpiredStatus = NO;
+        timedMgr.onCompletion = ^(BOOL expired) {
+            completionCount++;
+            lastExpiredStatus = expired;
+        };
+        
+        [timedMgr startSessionWithDuration:1800.0];
+        if (timedMgr.remainingSeconds != 1800.0) {
+            fprintf(stderr, "FAIL: Clock-injected start failed (expected 1800.0, got %f)\n", timedMgr.remainingSeconds);
+            return 1;
+        }
+        
+        // Advance 600s active
+        fakeContinuousTime += 600.0;
+        if (timedMgr.remainingSeconds != 1200.0) {
+            fprintf(stderr, "FAIL: Clock-injected advance failed (expected 1200.0, got %f)\n", timedMgr.remainingSeconds);
+            return 1;
+        }
+        
+        // Advance 1500s across system sleep (total elapsed 2100s > 1800s session duration)
+        fakeContinuousTime += 1500.0;
+        // Reconcile wake event
+        [timedMgr reconcileWakeEvent];
+        
+        if (timedMgr.isActive || timedMgr.remainingSeconds != 0.0) {
+            fprintf(stderr, "FAIL: Timer did not expire on wake reconciliation after sleep\n");
+            return 1;
+        }
+        if (completionCount != 1 || !lastExpiredStatus) {
+            fprintf(stderr, "FAIL: Completion handler not called exactly once on wake expiry (count=%d)\n", completionCount);
+            return 1;
+        }
+        
+        // Idempotent secondary wake call (must not trigger duplicate completions)
+        [timedMgr reconcileWakeEvent];
+        if (completionCount != 1) {
+            fprintf(stderr, "FAIL: Duplicate completion triggered on repeated wake event\n");
+            return 1;
+        }
+        
+        timedMgr.timeProvider = nil;
+        timedMgr.onCompletion = nil;
+        fprintf(stdout, "[PASS] MPTimedAwakeManager sleep-aware countdown (mach_continuous_time) and wake reconciliation\n");
         
         // 8. MPPriorityArbiter dynamic Timed Awake manager integration and fallback
         arbiter.timedAwakeManager = timedMgr;
@@ -325,11 +376,9 @@ static int runSelfTests(void) {
         }
         fprintf(stdout, "[PASS] Clean teardown and assertion release\n");
         
-        // Restore original user settings
-        settings.keepAwakeWhileCharging = origCharging;
-        settings.alwaysAwake = origAlways;
-        settings.keepDisplayAwake = origDisplay;
-        settings.batterySafetyThreshold = origThreshold;
+        // Clean up isolated test suite (production defaults are never modified)
+        [settings resetSuite];
+        [MPAppSettings resetSharedInstance];
         
         fprintf(stdout, "All self-tests passed cleanly.\n");
         return 0;
@@ -359,7 +408,7 @@ int main(int argc, const char * argv[]) {
                         "  - Smart Awake: Keeps Mac awake while on AC power\n"
                         "  - Timed Awake: Custom duration & presets (15m to 8h)\n"
                         "  - Always Awake: Battery-safe continuous awake mode\n"
-                        "  - Keep Display Awake: Prevents monitor idle sleep (cutoff safe)\n"
+                        "  - Keep Display On: Prevents monitor idle sleep (cutoff safe)\n"
                         "  - Battery Cutoff: Configurable safety threshold (default 40%%)\n"
                         "  - Launch at Login: Background SMAppService integration\n");
                 return 0;

@@ -206,15 +206,15 @@
     _alwaysAwakeItem.toolTip = @"Keep your Mac awake continuously until battery reaches the safety threshold.";
     [_menu addItem:_alwaysAwakeItem];
     
-    // Keep Display Awake Toggle (Default: OFF - screen sleeps naturally, respects battery threshold)
-    _keepDisplayAwakeItem = [[NSMenuItem alloc] initWithTitle:@"Keep Display Awake"
+    // Keep Display On Toggle (Default: OFF - screen sleeps naturally, respects battery threshold)
+    _keepDisplayAwakeItem = [[NSMenuItem alloc] initWithTitle:@"Keep Display On"
                                                        action:@selector(toggleKeepDisplayAwake)
                                                 keyEquivalent:@"d"];
     _keepDisplayAwakeItem.target = self;
-    _keepDisplayAwakeItem.toolTip = @"Keep the display awake. Default is off so screen sleeps normally.";
+    _keepDisplayAwakeItem.toolTip = @"Keep the display on. Default is off so screen sleeps normally.";
     [_menu addItem:_keepDisplayAwakeItem];
     
-    // Battery Safety Threshold Submenu (Applies to Always Awake & Keep Display Awake)
+    // Battery Safety Threshold Submenu (Applies to Always Awake & Keep Display On)
     _thresholdParentItem = [[NSMenuItem alloc] initWithTitle:@"Battery Safety Threshold" action:nil keyEquivalent:@""];
     _thresholdParentItem.toolTip = @"Battery percentage below which continuous keep-awake and display awake automatically pause.";
     NSMenu *thresholdSubmenu = [[NSMenu alloc] initWithTitle:@"Battery Safety Threshold"];

@@ -23,8 +23,12 @@ typedef void (^MPTimedAwakeCompletionHandler)(BOOL expired);
 @property (nonatomic, copy, nullable) MPTimedAwakeTickHandler onTick;
 @property (nonatomic, copy, nullable) MPTimedAwakeCompletionHandler onCompletion;
 
+/// Clock injection provider for deterministic testing. Defaults to continuous time via mach_continuous_time().
+@property (nonatomic, copy, nullable) NSTimeInterval (^timeProvider)(void);
+
 - (void)startSessionWithDuration:(NSTimeInterval)duration;
 - (void)cancelSession;
+- (void)reconcileWakeEvent;
 
 @end
 
