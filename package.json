@@ -1,0 +1,13 @@
+{
+  "name": "macpulse",
+  "version": "1.0.0",
+  "description": "Lightweight native macOS menu bar keep-awake utility",
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "package": "bun run scripts/package.ts",
+    "test": "swift test"
+  },
+  "keywords": ["macos", "menu-bar", "keep-awake", "swift", "iokit"],
+  "author": "Shoaib",
+  "license": "MIT"
+}
