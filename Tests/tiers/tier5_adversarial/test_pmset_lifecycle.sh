@@ -13,23 +13,17 @@ if [[ ! -x "$BIN_PATH" ]]; then
     exit 1
 fi
 
-BUNDLE_ID="com.shoaib.macpulse"
+BUNDLE_ID="com.shoaib.macpulse.tests"
+export MACPULSE_DEFAULTS_SUITE="com.shoaib.macpulse.tests"
 
 echo ">>> [STRESS 4] Starting Kernel Power Assertion Lifecycle Verification..."
 
-# 1. Preserve original settings
-ORIG_CHARGING=$(defaults read "$BUNDLE_ID" keepAwakeWhileCharging 2>/dev/null || echo "1")
-ORIG_ALWAYS=$(defaults read "$BUNDLE_ID" alwaysAwake 2>/dev/null || echo "0")
-ORIG_DISPLAY=$(defaults read "$BUNDLE_ID" allowDisplaySleep 2>/dev/null || echo "1")
-ORIG_THRESHOLD=$(defaults read "$BUNDLE_ID" batterySafetyThreshold 2>/dev/null || echo "20")
-
-restore_settings() {
-    defaults write "$BUNDLE_ID" keepAwakeWhileCharging -bool "$ORIG_CHARGING" 2>/dev/null || true
-    defaults write "$BUNDLE_ID" alwaysAwake -bool "$ORIG_ALWAYS" 2>/dev/null || true
-    defaults write "$BUNDLE_ID" allowDisplaySleep -bool "$ORIG_DISPLAY" 2>/dev/null || true
-    defaults write "$BUNDLE_ID" batterySafetyThreshold -int "$ORIG_THRESHOLD" 2>/dev/null || true
+# Isolate test suite cleanly
+cleanup_test_settings() {
+    defaults delete "$BUNDLE_ID" 2>/dev/null || true
 }
-trap restore_settings EXIT
+trap cleanup_test_settings EXIT INT TERM
+cleanup_test_settings
 
 defaults write "$BUNDLE_ID" keepAwakeWhileCharging -bool YES
 defaults write "$BUNDLE_ID" alwaysAwake -bool YES
@@ -133,9 +127,7 @@ if echo "$PMSET_POST2" | grep -q "pid $APP_PID2"; then
 fi
 echo "  [Step 4.5 PASS] Kernel automatically purged all assertions on SIGKILL (no leaks)."
 
-# Reset defaults
-defaults write "$BUNDLE_ID" allowDisplaySleep -bool YES
-defaults write "$BUNDLE_ID" alwaysAwake -bool NO
+cleanup_test_settings
 
 echo ">>> [STRESS 4 COMPLETE] Kernel power assertion lifecycle verification PASSED."
 exit 0

@@ -17,29 +17,68 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
     NSUserDefaults *_defaults;
 }
 
+static MPAppSettings *s_sharedSettingsInstance = nil;
+
 + (instancetype)sharedSettings {
-    static MPAppSettings *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        instance = [[MPAppSettings alloc] init];
+        const char *envSuite = getenv("MACPULSE_DEFAULTS_SUITE");
+        NSString *suite = envSuite ? [NSString stringWithUTF8String:envSuite] : nil;
+        s_sharedSettingsInstance = [[MPAppSettings alloc] initWithSuiteName:suite];
     });
-    return instance;
+    return s_sharedSettingsInstance;
+}
+
++ (instancetype)sharedSettingsWithSuiteName:(nullable NSString *)suiteName {
+    @synchronized([MPAppSettings class]) {
+        if (s_sharedSettingsInstance == nil ||
+            (suiteName != nil && ![s_sharedSettingsInstance.suiteName isEqualToString:suiteName]) ||
+            (suiteName == nil && s_sharedSettingsInstance.suiteName != nil)) {
+            s_sharedSettingsInstance = [[MPAppSettings alloc] initWithSuiteName:suiteName];
+        }
+        return s_sharedSettingsInstance;
+    }
+}
+
++ (void)resetSharedInstance {
+    @synchronized([MPAppSettings class]) {
+        s_sharedSettingsInstance = nil;
+    }
+}
+
+- (NSString *)effectiveDomainName {
+    return _suiteName ?: kBundleIdentifier;
 }
 
 - (NSUserDefaults *)userDefaults {
     if (_defaults) return _defaults;
-    NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
-    if (bundleID != nil) {
-        _defaults = [NSUserDefaults standardUserDefaults];
+    if (_suiteName != nil) {
+        _defaults = [[NSUserDefaults alloc] initWithSuiteName:_suiteName];
     } else {
-        _defaults = [[NSUserDefaults alloc] initWithSuiteName:kBundleIdentifier] ?: [NSUserDefaults standardUserDefaults];
+        const char *envSuite = getenv("MACPULSE_DEFAULTS_SUITE");
+        if (envSuite != NULL && strlen(envSuite) > 0) {
+            _suiteName = [NSString stringWithUTF8String:envSuite];
+            _defaults = [[NSUserDefaults alloc] initWithSuiteName:_suiteName];
+        } else {
+            NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
+            if (bundleID != nil) {
+                _defaults = [NSUserDefaults standardUserDefaults];
+            } else {
+                _defaults = [[NSUserDefaults alloc] initWithSuiteName:kBundleIdentifier] ?: [NSUserDefaults standardUserDefaults];
+            }
+        }
     }
     return _defaults;
 }
 
 - (instancetype)init {
+    return [self initWithSuiteName:nil];
+}
+
+- (instancetype)initWithSuiteName:(nullable NSString *)suiteName {
     self = [super init];
     if (self) {
+        _suiteName = [suiteName copy];
         [self seedDefaultsIfNecessary];
         [self reloadSettings];
         
@@ -51,13 +90,23 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
     return self;
 }
 
+- (void)resetSuite {
+    NSString *domain = [self effectiveDomainName];
+    [[self userDefaults] removePersistentDomainForName:domain];
+    [[self userDefaults] synchronize];
+    CFPreferencesAppSynchronize((__bridge CFStringRef)domain);
+    [self seedDefaultsIfNecessary];
+    [self reloadSettings];
+}
+
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)seedDefaultsIfNecessary {
     NSUserDefaults *defs = [self userDefaults];
-    CFPreferencesAppSynchronize((__bridge CFStringRef)kBundleIdentifier);
+    NSString *domain = [self effectiveDomainName];
+    CFPreferencesAppSynchronize((__bridge CFStringRef)domain);
     
     if ([defs objectForKey:kKeepAwakeWhileChargingKey] == nil) {
         [defs setBool:YES forKey:kKeepAwakeWhileChargingKey];
@@ -72,11 +121,12 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
         [defs setInteger:kMPBatteryThresholdDefault forKey:kBatterySafetyThresholdKey];
     }
     [defs synchronize];
-    CFPreferencesAppSynchronize((__bridge CFStringRef)kBundleIdentifier);
+    CFPreferencesAppSynchronize((__bridge CFStringRef)domain);
 }
 
 - (void)reloadSettings {
-    CFPreferencesAppSynchronize((__bridge CFStringRef)kBundleIdentifier);
+    NSString *domain = [self effectiveDomainName];
+    CFPreferencesAppSynchronize((__bridge CFStringRef)domain);
     NSUserDefaults *defs = [self userDefaults];
     
     id chargingVal = [defs objectForKey:kKeepAwakeWhileChargingKey];
@@ -85,10 +135,27 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
     id alwaysVal = [defs objectForKey:kAlwaysAwakeKey];
     _alwaysAwake = (alwaysVal != nil) ? [defs boolForKey:kAlwaysAwakeKey] : NO;
     
-    if ([defs objectForKey:kKeepDisplayAwakeKey] != nil) {
+    id keepDisplayVal = [defs objectForKey:kKeepDisplayAwakeKey];
+    id allowDisplayVal = [defs objectForKey:kAllowDisplaySleepKey];
+    if (keepDisplayVal != nil && allowDisplayVal != nil) {
+        BOOL keepDisp = [defs boolForKey:kKeepDisplayAwakeKey];
+        BOOL allowDisp = [defs boolForKey:kAllowDisplaySleepKey];
+        if (allowDisp == NO && keepDisp == NO) {
+            // allowDisplaySleep was explicitly set to NO
+            _keepDisplayAwake = YES;
+            _allowDisplaySleep = NO;
+        } else if (allowDisp == YES && keepDisp == YES) {
+            // allowDisplaySleep was explicitly set to YES
+            _keepDisplayAwake = NO;
+            _allowDisplaySleep = YES;
+        } else {
+            _keepDisplayAwake = keepDisp;
+            _allowDisplaySleep = allowDisp;
+        }
+    } else if (keepDisplayVal != nil) {
         _keepDisplayAwake = [defs boolForKey:kKeepDisplayAwakeKey];
         _allowDisplaySleep = !_keepDisplayAwake;
-    } else if ([defs objectForKey:kAllowDisplaySleepKey] != nil) {
+    } else if (allowDisplayVal != nil) {
         _allowDisplaySleep = [defs boolForKey:kAllowDisplaySleepKey];
         _keepDisplayAwake = !_allowDisplaySleep;
     } else {
@@ -118,7 +185,7 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
     _keepAwakeWhileCharging = keepAwakeWhileCharging;
     [[self userDefaults] setBool:keepAwakeWhileCharging forKey:kKeepAwakeWhileChargingKey];
     [[self userDefaults] synchronize];
-    CFPreferencesAppSynchronize((__bridge CFStringRef)kBundleIdentifier);
+    CFPreferencesAppSynchronize((__bridge CFStringRef)[self effectiveDomainName]);
     [[NSNotificationCenter defaultCenter] postNotificationName:kMPAppSettingsDidChangeNotification object:self];
 }
 
@@ -126,7 +193,7 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
     _alwaysAwake = alwaysAwake;
     [[self userDefaults] setBool:alwaysAwake forKey:kAlwaysAwakeKey];
     [[self userDefaults] synchronize];
-    CFPreferencesAppSynchronize((__bridge CFStringRef)kBundleIdentifier);
+    CFPreferencesAppSynchronize((__bridge CFStringRef)[self effectiveDomainName]);
     [[NSNotificationCenter defaultCenter] postNotificationName:kMPAppSettingsDidChangeNotification object:self];
 }
 
@@ -136,7 +203,7 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
     [[self userDefaults] setBool:keepDisplayAwake forKey:kKeepDisplayAwakeKey];
     [[self userDefaults] setBool:!keepDisplayAwake forKey:kAllowDisplaySleepKey];
     [[self userDefaults] synchronize];
-    CFPreferencesAppSynchronize((__bridge CFStringRef)kBundleIdentifier);
+    CFPreferencesAppSynchronize((__bridge CFStringRef)[self effectiveDomainName]);
     [[NSNotificationCenter defaultCenter] postNotificationName:kMPAppSettingsDidChangeNotification object:self];
 }
 
@@ -151,7 +218,7 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
     _batterySafetyThreshold = clamped;
     [[self userDefaults] setInteger:_batterySafetyThreshold forKey:kBatterySafetyThresholdKey];
     [[self userDefaults] synchronize];
-    CFPreferencesAppSynchronize((__bridge CFStringRef)kBundleIdentifier);
+    CFPreferencesAppSynchronize((__bridge CFStringRef)[self effectiveDomainName]);
     [[NSNotificationCenter defaultCenter] postNotificationName:kMPAppSettingsDidChangeNotification object:self];
 }
 

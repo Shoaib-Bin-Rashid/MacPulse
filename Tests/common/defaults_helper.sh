@@ -3,21 +3,18 @@
 # Author: test_writer_e2e_1
 # Constraints: Plain English output only. Zero Bangla/Bengali characters.
 
-PREFS_DOMAIN="com.shoaib.macpulse"
-PREFS_BACKUP_FILE="${TEST_TEMP_DIR}/macpulse_prefs_backup.plist"
+PREFS_DOMAIN="com.shoaib.macpulse.tests"
+export MACPULSE_DEFAULTS_SUITE="com.shoaib.macpulse.tests"
+PREFS_BACKUP_FILE="${TEST_TEMP_DIR}/macpulse_test_prefs_backup.plist"
 
 backup_preferences() {
-    if defaults read "$PREFS_DOMAIN" > /dev/null 2>&1; then
-        defaults export "$PREFS_DOMAIN" "$PREFS_BACKUP_FILE" > /dev/null 2>&1 || true
-    fi
+    # Isolate test suite before running
+    defaults delete "$PREFS_DOMAIN" > /dev/null 2>&1 || true
 }
 
 restore_preferences() {
-    if [[ -f "$PREFS_BACKUP_FILE" ]]; then
-        defaults import "$PREFS_DOMAIN" "$PREFS_BACKUP_FILE" > /dev/null 2>&1 || true
-    else
-        defaults delete "$PREFS_DOMAIN" > /dev/null 2>&1 || true
-    fi
+    # Clean up ephemeral test suite
+    defaults delete "$PREFS_DOMAIN" > /dev/null 2>&1 || true
 }
 
 get_preference() {

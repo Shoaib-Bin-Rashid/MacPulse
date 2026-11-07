@@ -30,7 +30,8 @@ int main(int argc, const char * argv[]) {
     @autoreleasepool {
         fprintf(stdout, ">>> [STRESS 2] Starting MPPriorityArbiter Exhaustive State Matrix Harness...\n");
         
-        MPAppSettings *settings = [MPAppSettings sharedSettings];
+        MPAppSettings *settings = [MPAppSettings sharedSettingsWithSuiteName:@"com.shoaib.macpulse.tests"];
+        [settings resetSuite];
         MPPowerManager *pm = [MPPowerManager sharedManager];
         [pm releaseAllAssertions];
         
@@ -106,8 +107,9 @@ int main(int argc, const char * argv[]) {
                                             expectedMode = MPActiveModeDisabled;
                                         }
                                         
+                                        BOOL isBatteryBelowThreshold = (isPortableOnBattery && reqBattery >= 0 && reqBattery <= reqThreshold);
                                         BOOL expectedSystem = (expectedMode != MPActiveModeDisabled);
-                                        BOOL expectedDisplay = expectedSystem && (!reqAllowDisplay);
+                                        BOOL expectedDisplay = expectedSystem && (!reqAllowDisplay) && (!isBatteryBelowThreshold);
                                         
                                         // Invariant 1: Battery Cutoff detection
                                         if (arbiter.isBatteryCutoffActive != shouldCutoff) {
@@ -159,6 +161,7 @@ int main(int argc, const char * argv[]) {
         
         [arbiter stop];
         [pm releaseAllAssertions];
+        [settings resetSuite];
         
         if (failureCount > 0) {
             fprintf(stderr, "FAIL: %d failures out of %d state combinations!\n", failureCount, totalTests);
