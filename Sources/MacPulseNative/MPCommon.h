@@ -13,4 +13,9 @@ typedef NS_ENUM(NSInteger, MPActiveMode) {
     MPActiveModeAlwaysAwake = 3
 };
 
+#define kMPBatteryThresholdMin 10
+#define kMPBatteryThresholdMax 80
+#define kMPBatteryThresholdDefault 40
+
 #endif /* MPCommon_h */
+

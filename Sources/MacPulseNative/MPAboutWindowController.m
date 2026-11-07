@@ -126,7 +126,11 @@
 - (void)showWindow:(nullable id)sender {
     [self.window center];
     [self.window makeKeyAndOrderFront:sender];
-    [NSApp activateIgnoringOtherApps:YES];
+    if (@available(macOS 14.0, *)) {
+        [NSApp activate];
+    } else {
+        [NSApp activateIgnoringOtherApps:YES];
+    }
 }
 
 - (void)closeWindow:(nullable id)sender {

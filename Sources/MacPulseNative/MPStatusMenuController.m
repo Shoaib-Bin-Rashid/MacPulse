@@ -13,9 +13,11 @@
 // MARK: - LoginItemManager
 @interface MPLoginItemManager : NSObject
 @property (nonatomic, readonly) BOOL isLaunchAtLoginEnabled;
+@property (nonatomic, readonly) BOOL requiresApproval;
 + (instancetype)sharedManager;
 - (BOOL)toggleLaunchAtLogin;
 - (void)refreshStatus;
+- (void)openSystemSettings;
 @end
 
 @implementation MPLoginItemManager
@@ -31,22 +33,32 @@
 
 - (void)refreshStatus {
     if (@available(macOS 13.0, *)) {
-        _isLaunchAtLoginEnabled = ([SMAppService mainAppService].status == SMAppServiceStatusEnabled);
+        SMAppServiceStatus status = [SMAppService mainAppService].status;
+        _isLaunchAtLoginEnabled = (status == SMAppServiceStatusEnabled);
+        _requiresApproval = (status == SMAppServiceStatusRequiresApproval);
     } else {
         _isLaunchAtLoginEnabled = NO;
+        _requiresApproval = NO;
+    }
+}
+
+- (void)openSystemSettings {
+    if (@available(macOS 13.0, *)) {
+        [SMAppService openSystemSettingsLoginItems];
     }
 }
 
 - (BOOL)toggleLaunchAtLogin {
     if (@available(macOS 13.0, *)) {
         NSError *error = nil;
-        if ([SMAppService mainAppService].status == SMAppServiceStatusEnabled) {
-            [[SMAppService mainAppService] unregisterAndReturnError:&error];
+        SMAppService *service = [SMAppService mainAppService];
+        if (service.status == SMAppServiceStatusEnabled) {
+            [service unregisterAndReturnError:&error];
         } else {
-            [[SMAppService mainAppService] registerAndReturnError:&error];
+            [service registerAndReturnError:&error];
         }
         [self refreshStatus];
-        return (error == nil);
+        return (error == nil && !_requiresApproval);
     }
     return NO;
 }
@@ -176,10 +188,12 @@
                                                         action:@selector(toggleKeepAwakeWhileCharging)
                                                  keyEquivalent:@"c"];
     _keepAwakeChargingItem.target = self;
+    _keepAwakeChargingItem.toolTip = @"Keep your Mac awake while connected to AC power.";
     [_menu addItem:_keepAwakeChargingItem];
     
     // Timed Awake Submenu
     _timedAwakeParentItem = [[NSMenuItem alloc] initWithTitle:@"Timed Awake" action:nil keyEquivalent:@""];
+    _timedAwakeParentItem.toolTip = @"Keep your Mac awake for a set countdown duration.";
     _timedAwakeSubmenu = [[NSMenu alloc] initWithTitle:@"Timed Awake"];
     _timedAwakeParentItem.submenu = _timedAwakeSubmenu;
     [_menu addItem:_timedAwakeParentItem];
@@ -189,6 +203,7 @@
                                                   action:@selector(toggleAlwaysAwake)
                                            keyEquivalent:@"a"];
     _alwaysAwakeItem.target = self;
+    _alwaysAwakeItem.toolTip = @"Keep your Mac awake continuously until battery reaches the safety threshold.";
     [_menu addItem:_alwaysAwakeItem];
     
     // Keep Display Awake Toggle (Default: OFF - screen sleeps naturally, respects battery threshold)
@@ -196,10 +211,12 @@
                                                        action:@selector(toggleKeepDisplayAwake)
                                                 keyEquivalent:@"d"];
     _keepDisplayAwakeItem.target = self;
+    _keepDisplayAwakeItem.toolTip = @"Keep the display awake. Default is off so screen sleeps normally.";
     [_menu addItem:_keepDisplayAwakeItem];
     
     // Battery Safety Threshold Submenu (Applies to Always Awake & Keep Display Awake)
     _thresholdParentItem = [[NSMenuItem alloc] initWithTitle:@"Battery Safety Threshold" action:nil keyEquivalent:@""];
+    _thresholdParentItem.toolTip = @"Battery percentage below which continuous keep-awake and display awake automatically pause.";
     NSMenu *thresholdSubmenu = [[NSMenu alloc] initWithTitle:@"Battery Safety Threshold"];
     NSArray<NSNumber *> *thresholds = @[@10, @20, @30, @40, @50, @60, @70, @80];
     for (NSNumber *num in thresholds) {
@@ -242,6 +259,7 @@
                                                     action:@selector(toggleLaunchAtLogin)
                                              keyEquivalent:@"l"];
     _launchAtLoginItem.target = self;
+    _launchAtLoginItem.toolTip = @"Automatically start MacPulse in the menu bar when you log in to macOS.";
     [_menu addItem:_launchAtLoginItem];
     
     [_menu addItem:[NSMenuItem separatorItem]];
@@ -251,6 +269,7 @@
                                                 action:@selector(showAboutHelp)
                                          keyEquivalent:@""];
     _aboutHelpItem.target = self;
+    _aboutHelpItem.toolTip = @"View MacPulse features, controls, version, and documentation.";
     [_menu addItem:_aboutHelpItem];
     
     [_menu addItem:[NSMenuItem separatorItem]];
@@ -260,6 +279,7 @@
                                                       action:@selector(quitApp)
                                                keyEquivalent:@"q"];
     quitItem.target = self;
+    quitItem.toolTip = @"Quit MacPulse and release all sleep assertions.";
     [_menu addItem:quitItem];
     
     [self updateTimedAwakeSubmenu];
@@ -332,7 +352,11 @@
 }
 
 - (void)promptCustomDuration {
-    [NSApp activateIgnoringOtherApps:YES];
+    if (@available(macOS 14.0, *)) {
+        [NSApp activate];
+    } else {
+        [NSApp activateIgnoringOtherApps:YES];
+    }
     
     NSAlert *alert = [[NSAlert alloc] init];
     alert.messageText = @"Custom Timed Awake Duration";
@@ -485,6 +509,24 @@
 
 - (void)toggleLaunchAtLogin {
     [_loginManager toggleLaunchAtLogin];
+    if (_loginManager.requiresApproval) {
+        if (@available(macOS 14.0, *)) {
+            [NSApp activate];
+        } else {
+            [NSApp activateIgnoringOtherApps:YES];
+        }
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Login Item Requires Approval";
+        alert.informativeText = @"MacPulse is currently disabled in macOS System Settings > Login Items.\n\nPlease enable MacPulse in System Settings to allow Launch at Login.";
+        alert.alertStyle = NSAlertStyleWarning;
+        [alert addButtonWithTitle:@"Open System Settings"];
+        [alert addButtonWithTitle:@"Cancel"];
+        NSModalResponse response = [alert runModal];
+        if (response == NSAlertFirstButtonReturn) {
+            [_loginManager openSystemSettings];
+        }
+    }
+    [_loginManager refreshStatus];
     [self updateUI];
 }
 

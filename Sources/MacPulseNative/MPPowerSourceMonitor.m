@@ -9,6 +9,7 @@
     CFRunLoopSourceRef _runLoopSource;
     dispatch_block_t _pendingDebounceBlock;
     BOOL _isStopped;
+    uint64_t _generation;
 }
 
 - (instancetype)init {
@@ -19,6 +20,7 @@
         _isCharging = NO;
         _isDesktop = NO;
         _isStopped = NO;
+        _generation = 0;
         [self refreshPowerSourceStatus];
     }
     return self;
@@ -34,9 +36,9 @@ static void MPPowerSourceCallback(void *context) {
 }
 
 - (void)handleHardwareNotification {
-    _isStopped = NO;
+    uint64_t currentGen = _generation;
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (self->_isStopped) return;
+        if (self->_isStopped || self->_generation != currentGen) return;
         if (self->_pendingDebounceBlock) {
             dispatch_block_cancel(self->_pendingDebounceBlock);
             self->_pendingDebounceBlock = nil;
@@ -44,7 +46,7 @@ static void MPPowerSourceCallback(void *context) {
         __weak typeof(self) weakSelf = self;
         dispatch_block_t block = dispatch_block_create(DISPATCH_BLOCK_INHERIT_QOS_CLASS, ^{
             __strong typeof(weakSelf) strongSelf = weakSelf;
-            if (!strongSelf || strongSelf->_isStopped) return;
+            if (!strongSelf || strongSelf->_isStopped || strongSelf->_generation != currentGen) return;
             [strongSelf refreshPowerSourceStatus];
             [strongSelf dispatchCallbacks];
         });
@@ -64,6 +66,7 @@ static void MPPowerSourceCallback(void *context) {
 
 - (void)startMonitoring {
     if (_runLoopSource != NULL) return;
+    _generation++;
     _isStopped = NO;
     
     _runLoopSource = IOPSNotificationCreateRunLoopSource(MPPowerSourceCallback, (__bridge void *)self);
@@ -74,12 +77,14 @@ static void MPPowerSourceCallback(void *context) {
 }
 
 - (void)stopMonitoring {
+    _generation++;
     _isStopped = YES;
     if (_pendingDebounceBlock) {
         dispatch_block_cancel(_pendingDebounceBlock);
         _pendingDebounceBlock = nil;
     }
     if (_runLoopSource != NULL) {
+        CFRunLoopSourceInvalidate(_runLoopSource);
         CFRunLoopRemoveSource(CFRunLoopGetMain(), _runLoopSource, kCFRunLoopCommonModes);
         CFRelease(_runLoopSource);
         _runLoopSource = NULL;

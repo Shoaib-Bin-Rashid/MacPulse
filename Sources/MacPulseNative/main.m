@@ -2,6 +2,7 @@
 // MacPulse Native Application Entrypoint & Headless Self-Test Runner
 
 #import <Cocoa/Cocoa.h>
+#import <sys/file.h>
 #import "MPCommon.h"
 #import "MPAppSettings.h"
 #import "MPPowerManager.h"
@@ -10,6 +11,33 @@
 #import "MPStatusMenuController.h"
 #import "MPTimedAwakeManager.h"
 #import "MPAboutWindowController.h"
+
+static int g_singleInstanceLockFd = -1;
+
+static BOOL acquireSingleInstanceGuard(void) {
+    NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier] ?: @"com.shoaib.macpulse";
+    pid_t currentPID = getpid();
+    
+    // 1. Check for running applications matching our bundle identifier
+    NSArray<NSRunningApplication *> *runningApps = [NSRunningApplication runningApplicationsWithBundleIdentifier:bundleID];
+    for (NSRunningApplication *app in runningApps) {
+        if (app.processIdentifier != currentPID) {
+            return NO;
+        }
+    }
+    
+    // 2. Atomic non-blocking POSIX file lock to prevent race conditions during simultaneous launches
+    NSString *lockPath = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.singleinstance.lock", bundleID]];
+    g_singleInstanceLockFd = open([lockPath fileSystemRepresentation], O_CREAT | O_RDWR, 0600);
+    if (g_singleInstanceLockFd >= 0) {
+        if (flock(g_singleInstanceLockFd, LOCK_EX | LOCK_NB) != 0) {
+            close(g_singleInstanceLockFd);
+            g_singleInstanceLockFd = -1;
+            return NO;
+        }
+    }
+    return YES;
+}
 
 // MARK: - Application Delegate
 @interface MPAppDelegate : NSObject <NSApplicationDelegate>
@@ -28,6 +56,11 @@
 - (void)applicationWillTerminate:(NSNotification *)notification {
     [_menuController cleanup];
     [[MPPowerManager sharedManager] releaseAllAssertions];
+    if (g_singleInstanceLockFd >= 0) {
+        flock(g_singleInstanceLockFd, LOCK_UN);
+        close(g_singleInstanceLockFd);
+        g_singleInstanceLockFd = -1;
+    }
 }
 
 @end
@@ -45,10 +78,49 @@ static int runSelfTests(void) {
         BOOL origDisplay = settings.keepDisplayAwake;
         NSInteger origThreshold = settings.batterySafetyThreshold;
         
-        if (settings.batterySafetyThreshold < 10) {
-            settings.batterySafetyThreshold = 40;
+        // Comprehensive boundary clamping tests: [-5, 0, 9, 10, 40, 80, 81, 100]
+        settings.batterySafetyThreshold = -5;
+        if (settings.batterySafetyThreshold != 10) {
+            fprintf(stderr, "FAIL: Clamping -5 failed (%ld)\n", (long)settings.batterySafetyThreshold);
+            return 1;
         }
-        fprintf(stdout, "[PASS] MPAppSettings initialization and defaults\n");
+        settings.batterySafetyThreshold = 0;
+        if (settings.batterySafetyThreshold != 10) {
+            fprintf(stderr, "FAIL: Clamping 0 failed (%ld)\n", (long)settings.batterySafetyThreshold);
+            return 1;
+        }
+        settings.batterySafetyThreshold = 9;
+        if (settings.batterySafetyThreshold != 10) {
+            fprintf(stderr, "FAIL: Clamping 9 failed (%ld)\n", (long)settings.batterySafetyThreshold);
+            return 1;
+        }
+        settings.batterySafetyThreshold = 10;
+        if (settings.batterySafetyThreshold != 10) {
+            fprintf(stderr, "FAIL: Clamping 10 failed (%ld)\n", (long)settings.batterySafetyThreshold);
+            return 1;
+        }
+        settings.batterySafetyThreshold = 40;
+        if (settings.batterySafetyThreshold != 40) {
+            fprintf(stderr, "FAIL: Setting 40 failed (%ld)\n", (long)settings.batterySafetyThreshold);
+            return 1;
+        }
+        settings.batterySafetyThreshold = 80;
+        if (settings.batterySafetyThreshold != 80) {
+            fprintf(stderr, "FAIL: Setting 80 failed (%ld)\n", (long)settings.batterySafetyThreshold);
+            return 1;
+        }
+        settings.batterySafetyThreshold = 81;
+        if (settings.batterySafetyThreshold != 80) {
+            fprintf(stderr, "FAIL: Clamping 81 failed (%ld)\n", (long)settings.batterySafetyThreshold);
+            return 1;
+        }
+        settings.batterySafetyThreshold = 100;
+        if (settings.batterySafetyThreshold != 80) {
+            fprintf(stderr, "FAIL: Clamping 100 failed (%ld)\n", (long)settings.batterySafetyThreshold);
+            return 1;
+        }
+        settings.batterySafetyThreshold = origThreshold;
+        fprintf(stdout, "[PASS] MPAppSettings initialization, defaults, and boundary clamping [10-80%%]\n");
         
         // 2. MPPowerManager dual assertion lifecycle and idempotency
         MPPowerManager *pm = [MPPowerManager sharedManager];
@@ -131,8 +203,8 @@ static int runSelfTests(void) {
         
         // 5. Battery safety cutoff logic
         settings.alwaysAwake = YES;
-        settings.batterySafetyThreshold = 99;
-        if (!powerMon.isDesktop && !powerMon.isACConnected && powerMon.batteryPercentage <= 99) {
+        settings.batterySafetyThreshold = 80;
+        if (!powerMon.isDesktop && !powerMon.isACConnected && powerMon.batteryPercentage <= 80) {
             [arbiter evaluateEffectiveState];
             if (!arbiter.isBatteryCutoffActive || settings.alwaysAwake) {
                 fprintf(stderr, "FAIL: Battery safety cutoff failed to disengage alwaysAwake\n");
@@ -300,6 +372,23 @@ int main(int argc, const char * argv[]) {
                 fprintf(stderr, "Unknown option: %s\nUsage: MacPulse [--selftest] [--help]\n", argv[i]);
                 return 1;
             }
+        }
+        
+        // 4. Single-instance guard (SEC-001)
+        if (!acquireSingleInstanceGuard()) {
+            NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier] ?: @"com.shoaib.macpulse";
+            pid_t currentPID = getpid();
+            for (NSRunningApplication *app in [NSRunningApplication runningApplicationsWithBundleIdentifier:bundleID]) {
+                if (app.processIdentifier != currentPID) {
+                    if (@available(macOS 14.0, *)) {
+                        [app activateWithOptions:0];
+                    } else {
+                        [app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+                    }
+                    break;
+                }
+            }
+            return 0;
         }
         
         NSApplication *app = [NSApplication sharedApplication];

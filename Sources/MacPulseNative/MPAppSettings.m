@@ -2,6 +2,7 @@
 // MacPulse Native Persistent Settings
 
 #import "MPAppSettings.h"
+#import "MPCommon.h"
 
 NSString *const kMPAppSettingsDidChangeNotification = @"MPAppSettingsDidChangeNotification";
 
@@ -68,7 +69,7 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
         [defs setBool:NO forKey:kAlwaysAwakeKey];
     }
     if ([defs objectForKey:kBatterySafetyThresholdKey] == nil) {
-        [defs setInteger:40 forKey:kBatterySafetyThresholdKey];
+        [defs setInteger:kMPBatteryThresholdDefault forKey:kBatterySafetyThresholdKey];
     }
     [defs synchronize];
     CFPreferencesAppSynchronize((__bridge CFStringRef)kBundleIdentifier);
@@ -96,8 +97,17 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
     }
     
     id threshVal = [defs objectForKey:kBatterySafetyThresholdKey];
-    NSInteger threshold = (threshVal != nil) ? [defs integerForKey:kBatterySafetyThresholdKey] : 40;
-    _batterySafetyThreshold = (threshold > 0) ? threshold : 40;
+    if (threshVal != nil) {
+        NSInteger val = [defs integerForKey:kBatterySafetyThresholdKey];
+        if (val >= kMPBatteryThresholdMin && val <= kMPBatteryThresholdMax) {
+            _batterySafetyThreshold = val;
+        } else {
+            // Persisted value corrupted or out of range: clamp to safe valid default
+            _batterySafetyThreshold = kMPBatteryThresholdDefault;
+        }
+    } else {
+        _batterySafetyThreshold = kMPBatteryThresholdDefault;
+    }
 }
 
 - (void)userDefaultsDidChange:(NSNotification *)note {
@@ -135,7 +145,10 @@ static NSString *const kBundleIdentifier = @"com.shoaib.macpulse";
 }
 
 - (void)setBatterySafetyThreshold:(NSInteger)batterySafetyThreshold {
-    _batterySafetyThreshold = (batterySafetyThreshold > 0) ? batterySafetyThreshold : 40;
+    NSInteger clamped = batterySafetyThreshold;
+    if (clamped < kMPBatteryThresholdMin) clamped = kMPBatteryThresholdMin;
+    if (clamped > kMPBatteryThresholdMax) clamped = kMPBatteryThresholdMax;
+    _batterySafetyThreshold = clamped;
     [[self userDefaults] setInteger:_batterySafetyThreshold forKey:kBatterySafetyThresholdKey];
     [[self userDefaults] synchronize];
     CFPreferencesAppSynchronize((__bridge CFStringRef)kBundleIdentifier);
