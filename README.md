@@ -52,12 +52,12 @@ All IOKit power assertions (`PreventUserIdleSystemSleep`, `PreventUserIdleDispla
 - Xcode Command Line Tools (`xcrun clang`, `lipo`, `codesign`, `iconutil`)
 
 ### Build Targets
-Compile the universal binary (`arm64` + `x86_64`) and assemble `build/MacPulse.app`:
+Compile the universal binary (`arm64` + `x86_64`) strictly inside `build/MacPulse.app` without touching system directories:
 ```bash
 ./build.sh
 ```
 
-To install cleanly to `/Applications/MacPulse.app`:
+To validate, stage, and safely install to `/Applications/MacPulse.app` (with automatic fallback to `~/Applications` and rollback on failure):
 ```bash
 ./build.sh --install
 ```
@@ -65,6 +65,11 @@ To install cleanly to `/Applications/MacPulse.app`:
 To install and immediately open the application:
 ```bash
 ./build.sh --open
+```
+
+To explicitly clean up legacy duplicate copies in `~/Applications`:
+```bash
+./build.sh --clean-legacy
 ```
 
 ### Packaging DMG
@@ -92,11 +97,12 @@ Runs automated regression tests across all features, boundaries, and teardown li
 ```
 
 *Note on Test Classification (QA-002):*
-- **14 True E2E Tests:** Execute live compiled binaries and assert kernel power assertions via `pmset -g assertions`.
-- **14 Integration Tests:** Exercise defaults persistence, AppKit/Cocoa APIs, and CLI argument parsing.
-- **17 Simulated/Mock-Only Tests:** Fast algorithmic simulations validating mathematical edge cases.
-- **9 Static/Build Checks:** Verify architectures (`lipo`), packaging, and `Info.plist` metadata.
-- **1 Hardware Telemetry Check:** Real-time battery status detection.
+- **17 True E2E Tests:** Execute live compiled binaries and assert kernel power assertions via `pmset -g assertions` and process termination lifecycles.
+- **14 Integration Tests:** Exercise isolated defaults suite persistence (`com.shoaib.macpulse.tests`), AppKit/Cocoa APIs, DMG mounting, and CLI argument parsing.
+- **10 Static/Build Checks:** Verify fat architectures (`arm64` + `x86_64`), packaging scripts, executable bits, and `Info.plist` metadata.
+- **9 Simulated/Mock-Only Tests:** Algorithmic precedence simulations and contract checks without external kernel side-effects.
+- **2 Hardware Telemetry Checks:** Real-time battery status and desktop power presence inspection.
+*Total: Exactly 52 test cases across 10 suites (100% PASS).*
 
 ### 3. Adversarial & Empirical Stress Suite (Tier 5)
 Executes concurrent lock contention tests (5,000 operations across 10 threads), 3,840-state exhaustive matrix validation, hardware notification debounce coalescing, and kernel `pmset` lifecycle verification:

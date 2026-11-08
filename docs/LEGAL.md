@@ -3,7 +3,7 @@
 **Product:** MacPulse  
 **Author:** Shoaib Bin Rashid  
 **License:** MIT License  
-**Date:** 2026-11-07
+**Date:** 2026-11-08  
 
 ---
 
@@ -18,12 +18,12 @@
 ## 2. Product Naming & Trademark Compliance Policy
 
 ### 2.1 Open-Source and Direct Distribution
-In accordance with Apple's *Guidelines for Using Apple Trademarks and Copyrights*, developers may use Apple trademarks in referential statements to describe platform compatibility. For independent open-source distribution via GitHub and Homebrew, the name "MacPulse" is used in an informal, descriptive, and non-commercial context (analogous to open-source utilities like MacDown, MacPass, and MacFUSE).
+In accordance with Apple's referential trademark usage principles, developers may use Apple wordmarks in descriptive statements to indicate platform compatibility. For independent open-source distribution via GitHub and Homebrew, the project name "MacPulse" is used in an informal, descriptive, and non-commercial open-source context (analogous to established open-source community utilities such as MacDown, MacPass, and MacFUSE).
 
 ### 2.2 Commercial & Mac App Store Policy
-- **No Blanket Clearance:** No representation is made that the name "MacPulse" is cleared for registered trademark status or commercial exclusivity.
-- **App Store Requirements:** Apple App Store Review Guidelines (Section 2.3.7) restrict applications from using Apple trademarks as the primary brand prefix or in a manner that creates false association with Apple.
-- **Future Commercial Roadmap:** If MacPulse is ever prepared for distribution via the commercial Mac App Store, a formal trademark review and naming transition (e.g., *"PulseAwake for Mac"*) must be conducted prior to submission.
+- **No Trademark Clearance Claimed:** MacPulse is an independent open-source project. No representation or warranty is made that the name "MacPulse" has been registered, cleared, or granted commercial trademark exclusivity in any jurisdiction.
+- **Apple App Store Review Guideline 2.3.7:** [Apple App Store Review Guideline 2.3.7 (Accurate Metadata)](https://developer.apple.com/app-store/review/guidelines/#accurate-metadata) requires unique app names and prohibits misleading metadata, keyword stuffing, or naming practices that create a false impression of endorsement, sponsorship, or origin by Apple Inc. While Guideline 2.3.7 does not impose a blanket prohibition against apps incorporating descriptive platform terms like "Mac", Apple's [Guidelines for Using Apple Trademarks](https://www.apple.com/legal/intellectual-property/guidelinesfor3rdparties.html) strongly advise third-party developers to adopt referential naming structures (for example, *"PulseAwake for Mac"*) rather than placing Apple marks as the leading brand identifier.
+- **Future Commercial Roadmap:** In the event MacPulse is prepared for commercial distribution or submitted to the Mac App Store in the future, a formal trademark clearance search and referential naming transition (e.g., *"PulseAwake for Mac"*) must be conducted prior to submission.
 
 ---
 

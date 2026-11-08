@@ -36,11 +36,12 @@ Duration: ~25-30 seconds
 Expected result: `10 Passed, 0 Failed, 52 Passed, 0 Failed`.
 
 #### Reconciled Test Classification Breakdown (QA-002)
-- **14 True E2E Tests:** Execute live compiled binaries and assert kernel power assertions via `pmset -g assertions`.
-- **14 Integration Tests:** Exercise defaults persistence, AppKit/Cocoa APIs, and CLI argument parsing.
-- **17 Simulated/Mock-Only Tests:** Fast algorithmic simulations validating mathematical edge cases across Tiers 1, 3, and 4 (reconciling the 14 vs 17 mock-test count discrepancy).
-- **9 Static/Build Checks:** Verify architectures (`lipo`), packaging, and `Info.plist` metadata.
-- **1 Hardware Telemetry Check:** Real-time battery status detection.
+- **17 True E2E Tests:** Execute live compiled binaries and assert kernel power assertions via `pmset -g assertions` and process termination lifecycles.
+- **14 Integration Tests:** Exercise isolated defaults suite persistence (`com.shoaib.macpulse.tests`), AppKit/Cocoa APIs, DMG packaging, and CLI flag handling.
+- **10 Static/Build Checks:** Verify fat architectures (`arm64` + `x86_64`), packaging scripts, executable bits, and `Info.plist` metadata.
+- **9 Simulated/Mock-Only Tests:** Pure algorithmic simulations and contract checks validating mathematical edge cases without kernel mutation.
+- **2 Hardware Telemetry Checks:** Real-time battery status and desktop power presence inspection.
+*Total: Exactly 52 tests across 10 suites (52 Passed, 0 Failed).*
 
 ### C. Run Adversarial Stress Test Suite (Tier 5)
 Run stress tests covering multi-threading (5,000 operations across 10 threads), 3,840-state exhaustive matrix validation, notification debounce coalescing, and kernel `pmset` lifecycle verification:
