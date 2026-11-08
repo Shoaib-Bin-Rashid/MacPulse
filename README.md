@@ -72,6 +72,11 @@ To explicitly clean up legacy duplicate copies in `~/Applications`:
 ./build.sh --clean-legacy
 ```
 
+To safely recover from an interrupted or aborted installation:
+```bash
+./build.sh --recover
+```
+
 ### Packaging DMG
 Generate a distributable disk image (`dist/MacPulse.dmg`) with `/Applications` symlink and UDZO compression format:
 ```bash
